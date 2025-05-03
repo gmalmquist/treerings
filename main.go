@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -162,23 +163,23 @@ func analyze(trees []Tree) (Analysis, error) {
 		}
 	}
 
-  fmt.Printf("\n\n======== ANALYSIS ========\n\n")
-  if includeHidden {
-    fmt.Print("  Hidden files were included in this analysis.\n")
-  } else {
-    fmt.Print("  Hidden files were NOT included in this analysis.\n")
-  }
-  fmt.Printf("  Unique files: %v\n", len(analysis.Unique))
-  fmt.Printf("  Duplicated files: %v\n", len(analysis.Duplicates))
+	fmt.Printf("\n\n======== ANALYSIS ========\n\n")
+	if includeHidden {
+		fmt.Print("  Hidden files were included in this analysis.\n")
+	} else {
+		fmt.Print("  Hidden files were NOT included in this analysis.\n")
+	}
+	fmt.Printf("  Unique files: %v\n", len(analysis.Unique))
+	fmt.Printf("  Duplicated files: %v\n", len(analysis.Duplicates))
 
-  missingCount := 0
-  for _, files := range analysis.Missing {
-    missingCount += len(files)
-  }
+	missingCount := 0
+	for _, files := range analysis.Missing {
+		missingCount += len(files)
+	}
 
-  fmt.Printf("  Missing* files: %v\n", missingCount)
-  fmt.Printf("\n  *files not found in first tree, but present in one or more subsequent trees.\n")
-  fmt.Printf("\n==========================\n\n")
+	fmt.Printf("  Missing* files: %v\n", missingCount)
+	fmt.Printf("\n  *files not found in first tree, but present in one or more subsequent trees.\n")
+	fmt.Printf("\n==========================\n\n")
 
 	return analysis, nil
 }
@@ -278,64 +279,64 @@ func scanNode(path string) (TreeNode, error) {
 }
 
 func exists(path string) (bool, error) {
-  _, err := os.Stat(path)
-  if errors.Is(err, os.ErrNotExist) {
-    return false, nil
-  }
-  if err != nil {
-    return false, err
-  }
-  return true, nil
+	_, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func safecopy(dst *Tree, root string, path string) error {
-  srcPath := filepath.Join(root, path)
-  dstPath := filepath.Join(dst.Root, path)
+	srcPath := filepath.Join(root, path)
+	dstPath := filepath.Join(dst.Root, path)
 
-  index := 0
-  for {
-    exists, err := exists(dstPath)
-    if err != nil {
-      fmt.Fprintf(os.Stderr, "Unexpected error backing up file %v: %v\n", srcPath, err)
-      return err
-    }
-    if !exists {
-      break
-    }
-    index++
-    ext := filepath.Ext(path)
-    base := path[:len(path)-len(ext)]
-    dstPath = filepath.Join(dst.Root, fmt.Sprintf("%v-%v%v", base, index, ext))
-  }
+	index := 0
+	for {
+		exists, err := exists(dstPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unexpected error backing up file %v: %v\n", srcPath, err)
+			return err
+		}
+		if !exists {
+			break
+		}
+		index++
+		ext := filepath.Ext(path)
+		base := path[:len(path)-len(ext)]
+		dstPath = filepath.Join(dst.Root, fmt.Sprintf("%v-%v%v", base, index, ext))
+	}
 
-  fmt.Printf("cp %v\n  to: %v ...", srcPath, dstPath)
+	fmt.Printf("cp %v\n  to: %v ...", srcPath, dstPath)
 
-  parent := filepath.Dir(dstPath)
-  if exists, _ := exists(parent); !exists {
-    if err := os.MkdirAll(parent, 0644); err != nil {
-      fmt.Fprintf(os.Stderr, "Couldn't create parent directory %v: %v\n", parent, err)
-      return err
-    }
-  }
+	parent := filepath.Dir(dstPath)
+	if exists, _ := exists(parent); !exists {
+		if err := os.MkdirAll(parent, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Couldn't create parent directory %v: %v\n", parent, err)
+			return err
+		}
+	}
 
-  in, err := os.Open(srcPath)
-  if err != nil {
-    return err
-  }
-  defer in.Close()
+	in, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
 
-  out, err := os.Create(dstPath)
-  if err != nil {
-    return err
-  }
-  defer out.Close()
-  if _, err = io.Copy(out, in); err != nil {
-    return err
-  }
+	out, err := os.Create(dstPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err = io.Copy(out, in); err != nil {
+		return err
+	}
 
-  fmt.Printf("...done.\n")
+	fmt.Printf("...done.\n")
 
-  return nil
+	return nil
 }
 
 func main() {
@@ -388,18 +389,18 @@ func main() {
 		return
 	}
 
-  fmt.Printf("written.\n")
+	fmt.Printf("written.\n")
 
-  if doBackup {
-    fmt.Printf("Backing up %v missing files to %v\n", len(analysis.Missing), trees[0].Root)
-    for root, paths := range analysis.Missing {
-      for _, path := range paths {
-        if err = safecopy(&trees[0], root, path); err != nil {
-          fmt.Fprintf(os.Stderr, "Couldn't backup %v: %v.\n", path, err)
-        }
-      }
-    }
-  }
+	if doBackup {
+		fmt.Printf("Backing up %v missing files to %v\n", len(analysis.Missing), trees[0].Root)
+		for root, paths := range analysis.Missing {
+			for _, path := range paths {
+				if err = safecopy(&trees[0], root, path); err != nil {
+					fmt.Fprintf(os.Stderr, "Couldn't backup %v: %v.\n", path, err)
+				}
+			}
+		}
+	}
 
 	fmt.Printf("Done.\n")
 }
