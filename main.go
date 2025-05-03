@@ -47,9 +47,9 @@ func scan(tree *Tree, path string) error {
 	}
 
 	collectPrint := func(node *TreeNode) {
-    if node.Fingerprint == "" {
-      return
-    }
+		if node.Fingerprint == "" {
+			return
+		}
 		if arr, ok := tree.Fingerprints[node.Fingerprint]; ok {
 			tree.Fingerprints[node.Fingerprint] = append(arr, node.Path)
 		} else {
@@ -132,7 +132,7 @@ func main() {
 		os.Exit(1)
 	}
 
-  root, err := scanNode(args[0]) 
+	root, err := scanNode(args[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error scanning root node: %v\n", root)
 		return
