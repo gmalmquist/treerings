@@ -27,10 +27,12 @@ type TreeNode struct {
 type Tree struct {
 	Root         string              `json:"root"`
 	Fingerprints map[string][]string `json:"fingerprints_to_paths"`
+	Duplicates   []string            `json:"duplicates"`
+	Unique       []string            `json:"unique"`
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: treerings [root directory to scan]\n")
+	fmt.Fprintf(os.Stderr, "usage: treerings [output json file] [root directory to scan]\n")
 	flag.PrintDefaults()
 	os.Exit(2)
 }
@@ -73,6 +75,19 @@ func scan(tree *Tree, path string) error {
 		})
 	} else {
 		collectPrint(&node)
+	}
+
+	for hash := range tree.Fingerprints {
+		arr, ok := tree.Fingerprints[hash]
+		if !ok {
+			// shouldn't happen!
+			return errors.New("Map missing key from key range???")
+		}
+		if len(arr) == 1 {
+			tree.Unique = append(tree.Unique, hash)
+		} else if len(arr) > 1 {
+			tree.Duplicates = append(tree.Duplicates, hash)
+		}
 	}
 
 	return nil
@@ -143,11 +158,15 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 	if len(args) < 1 {
+		fmt.Println("Missing output filepath.")
+		os.Exit(1)
+	}
+	if len(args) < 2 {
 		fmt.Println("Missing root directory path.")
 		os.Exit(1)
 	}
 
-	root, err := scanNode(args[0])
+	root, err := scanNode(args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error scanning root node: %v\n", root)
 		return
@@ -156,6 +175,8 @@ func main() {
 	tree := Tree{
 		Root:         root.Path,
 		Fingerprints: make(map[string][]string),
+		Duplicates:   []string{},
+		Unique:       []string{},
 	}
 
 	if err := scan(&tree, ""); err != nil {
@@ -163,7 +184,7 @@ func main() {
 		return
 	}
 
-	jsout := "treerings.json"
+	jsout := args[0]
 
 	fmt.Printf("Writing out %v\n", jsout)
 	encoded, err := json.Marshal(tree)
