@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const SampleHead = 16384
@@ -18,13 +19,16 @@ const SampleBody = 1015808
 const SampleTail = 16384
 const PageSize = 4096
 
+var includeHidden bool
+
 type TreeNode struct {
 	Name        string `json:"name"`
 	IsDir       bool   `json:"is_dir"`
 	Path        string `json:"path"`
 	Fingerprint string `json:"print"`
 	Size        int64  `json:"size"`
-	WasSymlink  bool   `json:"symlink"`
+	WasSymlink  bool   `json:"-"`
+	Skip        bool   `json:"-"`
 }
 
 type Tree struct {
@@ -86,6 +90,9 @@ func scanSubtree(tree *Tree, node *TreeNode) error {
 			node, err := scanNode(path)
 			if err != nil {
 				return err
+			}
+			if node.Skip {
+				return nil
 			}
 			collectPrint(&node)
 			if node.WasSymlink {
@@ -181,6 +188,11 @@ func scanNode(path string) (TreeNode, error) {
 	node.Path = path
 	node.Name = filepath.Base(path)
 
+	if !includeHidden && strings.HasPrefix(node.Name, ".") {
+		node.Skip = true
+		return node, nil
+	}
+
 	stat, err := os.Stat(path)
 	if err != nil {
 		return node, err
@@ -252,6 +264,7 @@ func main() {
 
 	flag.Usage = usage
 	flag.BoolVar(&doBackup, "b", false, "copy missing files into first tree.")
+	flag.BoolVar(&includeHidden, "h", false, "include hidden files (starting with a '.')")
 	flag.Parse()
 	args := flag.Args()
 
