@@ -125,10 +125,10 @@ func analyze(trees []Tree) (Analysis, error) {
 			analysis.Unique = append(analysis.Unique, arr...)
 		} else if len(arr) > 1 {
 			dups, ok := analysis.Duplicates[hash]
-			if !okay {
+			if !ok {
 				dups = []string{}
 			}
-			analysis.Duplicates = append(dups, arr...)
+			analysis.Duplicates[hash] = append(dups, arr...)
 		}
 	}
 
