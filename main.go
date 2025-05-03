@@ -35,7 +35,7 @@ type Analysis struct {
 	Trees      []Tree              `json:"trees"`
 	Duplicates map[string][]string `json:"duplicates"`
 	Unique     []string            `json:"unique"`
-	Missing    []string            `json:"missing"`
+	Missing    map[string][]string            `json:"missing"`
 }
 
 func usage() {
@@ -97,13 +97,14 @@ func analyze(trees []Tree) (Analysis, error) {
 		Trees:      trees,
 		Duplicates: make(map[string][]string),
 		Unique:     []string{},
-		Missing:    []string{},
+		Missing:    make(map[string][]string),
 	}
 
 	fmt.Printf("Analyzing %v trees ...\n", len(trees))
 
 	unioned := make(map[string][]string)
 	for ti, tree := range trees {
+    missing := []string{}
 		for hash := range tree.Fingerprints {
 			arr, ok := unioned[hash]
 			if !ok {
@@ -115,10 +116,18 @@ func analyze(trees []Tree) (Analysis, error) {
 				return analysis, errors.New("Map missing key from key range???")
 			}
       if ti > 0 && len(arr) == 0 {
-        analysis.Missing = append(analysis.Missing, arr2[0])
+        rel, err := filepath.Rel(tree.Root, arr2[0])
+        if err != nil {
+          rel = arr2[0]
+          fmt.Fprintf(os.Stderr, "Error relativizing %v against %v: %v\n", arr2[0], tree.Root, err)
+        }
+        missing = append(missing, rel)
       }
 			unioned[hash] = append(arr, arr2...)
 		}
+    if len(missing) > 0 {
+      analysis.Missing[tree.Root] = missing
+    }
 	}
 
 	for hash := range unioned {
