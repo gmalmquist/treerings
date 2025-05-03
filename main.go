@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 )
 
-const MaxBytes = 8192
+const MaxBytes = 1048576
 const PageSize = 4096
 
 type TreeNode struct {
