@@ -7,12 +7,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 )
+
+const MaxBytes = 8192
+const PageSize = 4096
 
 type TreeNode struct {
 	Name        string `json:"name"`
@@ -108,13 +110,26 @@ func scanNode(path string) (TreeNode, error) {
 		hasher := sha1.New()
 		f, err := os.Open(abs)
 		if err != nil {
-			return node, err
-		}
-		defer f.Close()
-		if _, err := io.Copy(hasher, f); err != nil {
 			fmt.Fprintf(os.Stderr, "Unable to fingerprint file %v, using size instead!\n", filepath.Clean(abs))
 			node.Fingerprint = fmt.Sprintf("size:%v", node.Size)
+			return node, err
 		} else {
+			defer f.Close()
+
+			hasher.Write([]byte(fmt.Sprintf("filesize:%v\n", node.Size)))
+			buf := make([]byte, PageSize)
+			totalRead := 0
+			for totalRead < MaxBytes {
+				read, err := f.Read(buf)
+				if err != nil {
+					break
+				}
+				if read <= 0 {
+					break
+				}
+				totalRead += read
+				hasher.Write(buf[:read])
+			}
 			hash := hasher.Sum(nil)
 			node.Fingerprint = hex.EncodeToString(hash)
 		}
