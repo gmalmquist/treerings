@@ -35,6 +35,7 @@ type Analysis struct {
 	Trees      []Tree              `json:"trees"`
 	Duplicates map[string][]string `json:"duplicates"`
 	Unique     []string            `json:"unique"`
+	Missing    []string            `json:"missing"`
 }
 
 func usage() {
@@ -96,14 +97,19 @@ func analyze(trees []Tree) (Analysis, error) {
 		Trees:      trees,
 		Duplicates: make(map[string][]string),
 		Unique:     []string{},
+		Missing:    []string{},
 	}
 
+	fmt.Printf("Analyzing %v trees ...\n", len(trees))
+
 	unioned := make(map[string][]string)
-	for ti := range trees {
-		tree := trees[ti]
+	for ti, tree := range trees {
 		for hash := range tree.Fingerprints {
 			arr, ok := unioned[hash]
 			if !ok {
+				if ti > 0 {
+					analysis.Missing = append(analysis.Missing, arr[0])
+				}
 				arr = []string{}
 			}
 			arr2, ok := tree.Fingerprints[hash]
@@ -227,20 +233,31 @@ func main() {
 		os.Exit(1)
 	}
 	if len(args) < 2 {
-		fmt.Println("Missing root directory path.")
+		fmt.Println("Missing root directory path(s).")
 		os.Exit(1)
 	}
 
-	tree, err := scan(args[1])
+	trees := []Tree{}
+
+	for _, path := range args[1:] {
+		tree, err := scan(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error scanning tree %v: %v\n", path, err)
+			return
+		}
+		trees = append(trees, tree)
+	}
+
+	analysis, err := analyze(trees)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error scanning tree: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error analyzing trees %v\n", err)
 		return
 	}
 
 	jsout := args[0]
 
 	fmt.Printf("Writing out %v\n", jsout)
-	encoded, err := json.Marshal(tree)
+	encoded, err := json.Marshal(analysis)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error marshalling json: %v\n", err)
 		return
