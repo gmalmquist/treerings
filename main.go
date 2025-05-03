@@ -313,7 +313,7 @@ func safecopy(dst *Tree, root string, path string) error {
 
 	parent := filepath.Dir(dstPath)
 	if exists, _ := exists(parent); !exists {
-		if err := os.MkdirAll(parent, 0644); err != nil {
+		if err := os.MkdirAll(parent, 0775); err != nil {
 			fmt.Fprintf(os.Stderr, "Couldn't create parent directory %v: %v\n", parent, err)
 			return err
 		}
@@ -383,7 +383,7 @@ func main() {
 		return
 	}
 
-	err = ioutil.WriteFile(jsout, encoded, 0644)
+	err = ioutil.WriteFile(jsout, encoded, 0664)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing json: %v\n", err)
 		return
