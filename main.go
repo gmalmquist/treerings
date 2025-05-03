@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 )
 
-const MaxBytes = 1048576
+const SampleHead = 16384
+const SampleBody = 1015808
+const SampleTail = 16384
 const PageSize = 4096
 
 type TreeNode struct {
@@ -27,8 +29,12 @@ type TreeNode struct {
 type Tree struct {
 	Root         string              `json:"root"`
 	Fingerprints map[string][]string `json:"fingerprints_to_paths"`
-	Duplicates   []string            `json:"duplicates"`
-	Unique       []string            `json:"unique"`
+}
+
+type Analysis struct {
+	Trees      []Tree              `json:"trees"`
+	Duplicates map[string][]string `json:"duplicates"`
+	Unique     []string            `json:"unique"`
 }
 
 func usage() {
@@ -37,18 +43,23 @@ func usage() {
 	os.Exit(2)
 }
 
-func scan(tree *Tree, path string) error {
+func scan(path string) (Tree, error) {
+	tree := Tree{
+		Root:         "",
+		Fingerprints: make(map[string][]string),
+	}
+
 	if path == "" {
-		if tree.Root == "" {
-			return errors.New("Tree root is nil!")
-		}
-		return scan(tree, tree.Root)
+		return tree, errors.New("Tree root is nil!")
 	}
 
 	node, err := scanNode(path)
 	if err != nil {
-		return err
+		fmt.Fprintf(os.Stderr, "Error scanning root node: %v\n", path)
+		return tree, err
 	}
+
+	tree.Root = node.Path
 
 	collectPrint := func(node *TreeNode) {
 		if node.Fingerprint == "" {
@@ -77,20 +88,51 @@ func scan(tree *Tree, path string) error {
 		collectPrint(&node)
 	}
 
-	for hash := range tree.Fingerprints {
-		arr, ok := tree.Fingerprints[hash]
-		if !ok {
-			// shouldn't happen!
-			return errors.New("Map missing key from key range???")
-		}
-		if len(arr) == 1 {
-			tree.Unique = append(tree.Unique, hash)
-		} else if len(arr) > 1 {
-			tree.Duplicates = append(tree.Duplicates, hash)
+	return tree, nil
+}
+
+func analyze(trees []Tree) (Analysis, error) {
+	analysis := Analysis{
+		Trees:      trees,
+		Duplicates: make(map[string][]string),
+		Unique:     []string{},
+	}
+
+	unioned := make(map[string][]string)
+	for ti := range trees {
+		tree := trees[ti]
+		for hash := range tree.Fingerprints {
+			arr, ok := unioned[hash]
+			if !ok {
+				arr = []string{}
+			}
+			arr2, ok := tree.Fingerprints[hash]
+			if !ok {
+				// shouldn't happen!
+				return analysis, errors.New("Map missing key from key range???")
+			}
+			unioned[hash] = append(arr, arr2...)
 		}
 	}
 
-	return nil
+	for hash := range unioned {
+		arr, ok := unioned[hash]
+		if !ok {
+			// shouldn't happen!
+			return analysis, errors.New("Map missing key from key range???")
+		}
+		if len(arr) == 1 {
+			analysis.Unique = append(analysis.Unique, arr...)
+		} else if len(arr) > 1 {
+			dups, ok := analysis.Duplicates[hash]
+			if !okay {
+				dups = []string{}
+			}
+			analysis.Duplicates = append(dups, arr...)
+		}
+	}
+
+	return analysis, nil
 }
 
 func scanNode(path string) (TreeNode, error) {
@@ -133,8 +175,17 @@ func scanNode(path string) (TreeNode, error) {
 
 			hasher.Write([]byte(fmt.Sprintf("filesize:%v\n", node.Size)))
 			buf := make([]byte, PageSize)
-			totalRead := 0
-			for totalRead < MaxBytes {
+
+			var totalRead int64
+			var maxBytes int64
+			var bodyStart int64
+
+			totalRead = 0
+			maxBytes = SampleHead + SampleBody + SampleTail
+			bodyStart = node.Size/2 - SampleBody/2
+			zone := 0
+
+			for totalRead < maxBytes {
 				read, err := f.Read(buf)
 				if err != nil {
 					break
@@ -142,8 +193,22 @@ func scanNode(path string) (TreeNode, error) {
 				if read <= 0 {
 					break
 				}
-				totalRead += read
+				totalRead += int64(read)
 				hasher.Write(buf[:read])
+
+				if zone == 0 && totalRead >= SampleHead {
+					if bodyStart > totalRead {
+						fmt.Printf("  read %v/%v, seek to body %v\n", totalRead, node.Size, bodyStart)
+						f.Seek(bodyStart, 0)
+					}
+					zone = 1
+				} else if zone == 1 && totalRead >= SampleHead+SampleBody {
+					if maxBytes < node.Size {
+						fmt.Printf("  read %v/%v, seek to tail %v\n", totalRead, node.Size, node.Size-SampleTail)
+						f.Seek(node.Size-SampleTail, 0)
+					}
+					zone = 2
+				}
 			}
 			hash := hasher.Sum(nil)
 			node.Fingerprint = hex.EncodeToString(hash)
@@ -166,20 +231,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	root, err := scanNode(args[1])
+	tree, err := scan(args[1])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error scanning root node: %v\n", root)
-		return
-	}
-
-	tree := Tree{
-		Root:         root.Path,
-		Fingerprints: make(map[string][]string),
-		Duplicates:   []string{},
-		Unique:       []string{},
-	}
-
-	if err := scan(&tree, ""); err != nil {
 		fmt.Fprintf(os.Stderr, "Error scanning tree: %v\n", err)
 		return
 	}
