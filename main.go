@@ -24,6 +24,7 @@ type TreeNode struct {
 	Path        string `json:"path"`
 	Fingerprint string `json:"print"`
 	Size        int64  `json:"size"`
+	WasSymlink  bool   `json:"symlink"`
 }
 
 type Tree struct {
@@ -35,7 +36,7 @@ type Analysis struct {
 	Trees      []Tree              `json:"trees"`
 	Duplicates map[string][]string `json:"duplicates"`
 	Unique     []string            `json:"unique"`
-	Missing    map[string][]string            `json:"missing"`
+	Missing    map[string][]string `json:"missing"`
 }
 
 func usage() {
@@ -61,7 +62,11 @@ func scan(path string) (Tree, error) {
 	}
 
 	tree.Root = node.Path
+	scanSubtree(&tree, &node)
+	return tree, nil
+}
 
+func scanSubtree(tree *Tree, node *TreeNode) error {
 	collectPrint := func(node *TreeNode) {
 		if node.Fingerprint == "" {
 			return
@@ -83,13 +88,16 @@ func scan(path string) (Tree, error) {
 				return err
 			}
 			collectPrint(&node)
+			if node.WasSymlink {
+				scanSubtree(tree, &node)
+			}
 			return nil
 		})
 	} else {
-		collectPrint(&node)
+		collectPrint(node)
 	}
 
-	return tree, nil
+	return nil
 }
 
 func analyze(trees []Tree) (Analysis, error) {
@@ -104,7 +112,7 @@ func analyze(trees []Tree) (Analysis, error) {
 
 	unioned := make(map[string][]string)
 	for ti, tree := range trees {
-    missing := []string{}
+		missing := []string{}
 		for hash := range tree.Fingerprints {
 			arr, ok := unioned[hash]
 			if !ok {
@@ -115,19 +123,19 @@ func analyze(trees []Tree) (Analysis, error) {
 				// shouldn't happen!
 				return analysis, errors.New("Map missing key from key range???")
 			}
-      if ti > 0 && len(arr) == 0 {
-        rel, err := filepath.Rel(tree.Root, arr2[0])
-        if err != nil {
-          rel = arr2[0]
-          fmt.Fprintf(os.Stderr, "Error relativizing %v against %v: %v\n", arr2[0], tree.Root, err)
-        }
-        missing = append(missing, rel)
-      }
+			if ti > 0 && len(arr) == 0 {
+				rel, err := filepath.Rel(tree.Root, arr2[0])
+				if err != nil {
+					rel = arr2[0]
+					fmt.Fprintf(os.Stderr, "Error relativizing %v against %v: %v\n", arr2[0], tree.Root, err)
+				}
+				missing = append(missing, rel)
+			}
 			unioned[hash] = append(arr, arr2...)
 		}
-    if len(missing) > 0 {
-      analysis.Missing[tree.Root] = missing
-    }
+		if len(missing) > 0 {
+			analysis.Missing[tree.Root] = missing
+		}
 	}
 
 	for hash := range unioned {
@@ -157,17 +165,23 @@ func scanNode(path string) (TreeNode, error) {
 		Path:        "",
 		Fingerprint: "",
 		Size:        0,
+		WasSymlink:  false,
 	}
 
-	abs, err := filepath.Abs(path)
+	link, err := os.Readlink(path)
+	if err == nil {
+		path = link
+		node.WasSymlink = true
+	}
+	path, err = filepath.Abs(path)
 	if err != nil {
 		return node, err
 	}
 
-	node.Path = abs
-	node.Name = filepath.Base(abs)
+	node.Path = path
+	node.Name = filepath.Base(path)
 
-	stat, err := os.Stat(abs)
+	stat, err := os.Stat(path)
 	if err != nil {
 		return node, err
 	}
@@ -177,12 +191,12 @@ func scanNode(path string) (TreeNode, error) {
 	if !node.IsDir {
 		node.Size = stat.Size()
 
-		fmt.Printf("fingerprinting %v ...\n", filepath.Clean(abs))
+		fmt.Printf("fingerprinting %v ...\n", filepath.Clean(path))
 
 		hasher := sha1.New()
-		f, err := os.Open(abs)
+		f, err := os.Open(path)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to fingerprint file %v, using size instead!\n", filepath.Clean(abs))
+			fmt.Fprintf(os.Stderr, "Unable to fingerprint file %v, using size instead!\n", filepath.Clean(path))
 			node.Fingerprint = fmt.Sprintf("size:%v", node.Size)
 			return node, err
 		} else {
@@ -234,9 +248,13 @@ func scanNode(path string) (TreeNode, error) {
 }
 
 func main() {
+	var doBackup bool
+
 	flag.Usage = usage
+	flag.BoolVar(&doBackup, "b", false, "copy missing files into first tree.")
 	flag.Parse()
 	args := flag.Args()
+
 	if len(args) < 1 {
 		fmt.Println("Missing output filepath.")
 		os.Exit(1)
