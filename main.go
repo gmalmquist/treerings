@@ -107,9 +107,6 @@ func analyze(trees []Tree) (Analysis, error) {
 		for hash := range tree.Fingerprints {
 			arr, ok := unioned[hash]
 			if !ok {
-				if ti > 0 {
-					analysis.Missing = append(analysis.Missing, arr[0])
-				}
 				arr = []string{}
 			}
 			arr2, ok := tree.Fingerprints[hash]
@@ -117,6 +114,9 @@ func analyze(trees []Tree) (Analysis, error) {
 				// shouldn't happen!
 				return analysis, errors.New("Map missing key from key range???")
 			}
+      if ti > 0 && len(arr) == 0 {
+        analysis.Missing = append(analysis.Missing, arr2[0])
+      }
 			unioned[hash] = append(arr, arr2...)
 		}
 	}
