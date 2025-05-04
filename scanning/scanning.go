@@ -20,6 +20,11 @@ const SampleBody = 1015808
 const SampleTail = 16384
 const PageSize = 4096
 
+type SyncGroup struct {
+  Roots []string `json:"root"`
+  Analysis Analysis `json:"analysis"`
+}
+
 type TreeNode struct {
 	Name        string `json:"name"`
 	IsDir       bool   `json:"is_dir"`
@@ -48,7 +53,7 @@ func (t *TreeNode) ModTime() time.Time {
 	return time.UnixMilli(t.Modified)
 }
 
-func Scan(path string) (Tree, error) {
+func Rescan(path string, cached *Tree) (Tree, error) {
 	tree := Tree{
 		Root:         "",
 		Fingerprints: make(map[string][]string),
@@ -59,18 +64,27 @@ func Scan(path string) (Tree, error) {
 		return tree, errors.New("Tree root is nil!")
 	}
 
-	node, err := scanNode(path)
+	node, err := scanNode(path, cached)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error scanning root node: %v\n", path)
 		return tree, err
 	}
 
 	tree.Root = node.Path
-	scanSubtree(&tree, &node)
+	scanSubtree(&tree, &node, cached)
 	return tree, nil
 }
 
-func scanSubtree(tree *Tree, node *TreeNode) error {
+func Scan(path string) (Tree, error) {
+	blank := Tree{
+		Root:         "",
+		Fingerprints: make(map[string][]string),
+		Nodes:        make(map[string]TreeNode),
+	}
+  return Rescan(path, &blank)
+}
+
+func scanSubtree(tree *Tree, node *TreeNode, cached *Tree) error {
 	collectPrint := func(node *TreeNode) {
 		if node.Fingerprint == "" {
 			return
@@ -88,7 +102,7 @@ func scanSubtree(tree *Tree, node *TreeNode) error {
 			if err != nil {
 				return err
 			}
-			node, err := scanNode(path)
+			node, err := scanNode(path, cached)
 			if err != nil {
 				return err
 			}
@@ -101,7 +115,7 @@ func scanSubtree(tree *Tree, node *TreeNode) error {
 			}
 			collectPrint(&node)
 			if node.WasSymlink {
-				scanSubtree(tree, &node)
+				scanSubtree(tree, &node, cached)
 			}
 			return nil
 		})
@@ -170,7 +184,7 @@ func Analyze(trees []Tree) (Analysis, error) {
 	return analysis, nil
 }
 
-func scanNode(path string) (TreeNode, error) {
+func scanNode(path string, cached *Tree) (TreeNode, error) {
 	node := TreeNode{
 		Name:        "",
 		IsDir:       false,
@@ -206,6 +220,12 @@ func scanNode(path string) (TreeNode, error) {
 
 	node.IsDir = stat.IsDir()
 	node.Modified = stat.ModTime().UnixMilli()
+
+  if cacheNode, ok := cached.Nodes[node.Path]; ok {
+    if node.Modified == cacheNode.Modified && node.Size == cacheNode.Size {
+      return cacheNode, nil
+    }
+  }
 
 	if !node.IsDir {
 		node.Size = stat.Size()

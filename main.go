@@ -2,6 +2,7 @@ package main
 
 import (
 	"gwen/treerings/scanning"
+	"gwen/treerings/webserver"
 
 	"encoding/json"
 	"flag"
@@ -18,12 +19,20 @@ func usage() {
 
 func main() {
 	var doBackup bool
+  var web bool
 
 	flag.Usage = usage
 	flag.BoolVar(&doBackup, "b", false, "copy missing files into first tree.")
 	flag.BoolVar(&scanning.IncludeHidden, "h", false, "include hidden files (starting with a '.')")
+  flag.BoolVar(&web, "web", false, "launch web server")
+  flag.IntVar(&webserver.Port, "port", 8380, "port for webserver")
 	flag.Parse()
 	args := flag.Args()
+
+  if web {
+    webserver.Serve()
+    return
+  }
 
 	if len(args) < 1 {
 		fmt.Println("Missing output filepath.")
