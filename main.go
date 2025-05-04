@@ -84,16 +84,23 @@ func scanSubtree(tree *Tree, node *TreeNode) error {
 	}
 
 	if node.IsDir {
+		fmt.Printf("WALK %v\n", node.Path)
 		filepath.WalkDir(node.Path, func(path string, d fs.DirEntry, err error) error {
+			fmt.Printf("walking %v: %v\n", path, err)
 			if err != nil {
 				return err
 			}
 			node, err := scanNode(path)
 			if err != nil {
+				fmt.Printf("couldn't scan %v: %v\n", path, err)
 				return err
 			}
 			if node.Skip {
-				return filepath.SkipDir
+				if d.IsDir() {
+					return filepath.SkipDir
+				} else {
+					return nil
+				}
 			}
 			collectPrint(&node)
 			if node.WasSymlink {
@@ -207,7 +214,7 @@ func scanNode(path string) (TreeNode, error) {
 	node.Path = path
 	node.Name = filepath.Base(path)
 
-	if !includeHidden && strings.HasPrefix(node.Name, ".") {
+	if !includeHidden && strings.HasPrefix(node.Name, ".") && node.Name != "." {
 		node.Skip = true
 		return node, nil
 	}
