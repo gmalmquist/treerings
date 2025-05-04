@@ -21,8 +21,8 @@ const SampleTail = 16384
 const PageSize = 4096
 
 type SyncGroup struct {
-  Roots []string `json:"root"`
-  Analysis Analysis `json:"analysis"`
+	Roots    []string `json:"root"`
+	Analysis Analysis `json:"analysis"`
 }
 
 type TreeNode struct {
@@ -81,7 +81,7 @@ func Scan(path string) (Tree, error) {
 		Fingerprints: make(map[string][]string),
 		Nodes:        make(map[string]TreeNode),
 	}
-  return Rescan(path, &blank)
+	return Rescan(path, &blank)
 }
 
 func scanSubtree(tree *Tree, node *TreeNode, cached *Tree) error {
@@ -184,6 +184,18 @@ func Analyze(trees []Tree) (Analysis, error) {
 	return analysis, nil
 }
 
+func NormPath(path string) (string, error) {
+	link, err := os.Readlink(path)
+	if err == nil {
+		path = link
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return path, err
+	}
+	return path, nil
+}
+
 func scanNode(path string, cached *Tree) (TreeNode, error) {
 	node := TreeNode{
 		Name:        "",
@@ -220,16 +232,15 @@ func scanNode(path string, cached *Tree) (TreeNode, error) {
 
 	node.IsDir = stat.IsDir()
 	node.Modified = stat.ModTime().UnixMilli()
+	node.Size = stat.Size()
 
-  if cacheNode, ok := cached.Nodes[node.Path]; ok {
-    if node.Modified == cacheNode.Modified && node.Size == cacheNode.Size {
-      return cacheNode, nil
-    }
-  }
+	if cacheNode, ok := cached.Nodes[node.Path]; ok {
+		if node.Modified == cacheNode.Modified && node.Size == cacheNode.Size {
+			return cacheNode, nil
+		}
+	}
 
 	if !node.IsDir {
-		node.Size = stat.Size()
-
 		fmt.Printf("fingerprinting %v ...\n", filepath.Clean(path))
 
 		hasher := sha1.New()
@@ -286,7 +297,7 @@ func scanNode(path string, cached *Tree) (TreeNode, error) {
 	return node, nil
 }
 
-func exists(path string) (bool, error) {
+func FileExists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
@@ -303,7 +314,7 @@ func safecopy(dst *Tree, root string, path string) error {
 
 	index := 0
 	for {
-		exists, err := exists(dstPath)
+		exists, err := FileExists(dstPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Unexpected error backing up file %v: %v\n", srcPath, err)
 			return err
@@ -320,7 +331,7 @@ func safecopy(dst *Tree, root string, path string) error {
 	fmt.Printf("cp %v\n  to: %v ...", srcPath, dstPath)
 
 	parent := filepath.Dir(dstPath)
-	if exists, _ := exists(parent); !exists {
+	if exists, _ := FileExists(parent); !exists {
 		if err := os.MkdirAll(parent, 0775); err != nil {
 			fmt.Fprintf(os.Stderr, "Couldn't create parent directory %v: %v\n", parent, err)
 			return err
