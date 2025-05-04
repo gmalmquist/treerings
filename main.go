@@ -84,15 +84,12 @@ func scanSubtree(tree *Tree, node *TreeNode) error {
 	}
 
 	if node.IsDir {
-		fmt.Printf("WALK %v\n", node.Path)
 		filepath.WalkDir(node.Path, func(path string, d fs.DirEntry, err error) error {
-			fmt.Printf("walking %v: %v\n", path, err)
 			if err != nil {
 				return err
 			}
 			node, err := scanNode(path)
 			if err != nil {
-				fmt.Printf("couldn't scan %v: %v\n", path, err)
 				return err
 			}
 			if node.Skip {
