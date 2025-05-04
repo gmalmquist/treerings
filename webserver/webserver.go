@@ -1,16 +1,22 @@
 package webserver
 
 import (
+  "gwen/treerings/scanning"
+
+  "github.com/google/uuid"
+
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	//"sync"
+	"path/filepath"
   "strconv"
   "net"
   "time"
 )
 
+var CacheDir string = ".treeringscache"
 var Port int
 
 func isPortBound(port int) bool {
@@ -20,6 +26,25 @@ func isPortBound(port int) bool {
     conn.Close()
   }
   return err == nil
+}
+
+type SyncGroup struct {
+  Id string `json:"id"`
+  Name string `json:"name"`
+	Roots    []string `json:"root"`
+  AnalysisFile string `json:"analysis_file"`
+  Analysis scanning.Analysis `json:"-"`
+}
+
+type Application struct {
+  Groups map[string]SyncGroup `json:"sync_groups"`
+}
+
+func (app *Application) NewGroup() SyncGroup {
+  var group SyncGroup
+  group.Id = uuid.NewString()
+  group.AnalysisFile = filepath.Join(CacheDir, fmt.Sprintf("%v.json", group.Id))
+  return group
 }
 
 func Serve() error {

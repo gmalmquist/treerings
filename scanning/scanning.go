@@ -20,11 +20,6 @@ const SampleBody = 1015808
 const SampleTail = 16384
 const PageSize = 4096
 
-type SyncGroup struct {
-	Roots    []string `json:"root"`
-	Analysis Analysis `json:"analysis"`
-}
-
 type TreeNode struct {
 	Name        string `json:"name"`
 	IsDir       bool   `json:"is_dir"`
