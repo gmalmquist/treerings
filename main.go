@@ -19,20 +19,20 @@ func usage() {
 
 func main() {
 	var doBackup bool
-	var web bool
+  var web bool
 
 	flag.Usage = usage
 	flag.BoolVar(&doBackup, "b", false, "copy missing files into first tree.")
 	flag.BoolVar(&scanning.IncludeHidden, "h", false, "include hidden files (starting with a '.')")
-	flag.BoolVar(&web, "web", false, "launch web server")
-	flag.IntVar(&webserver.Port, "port", 8380, "port for webserver")
+  flag.BoolVar(&web, "web", false, "launch web server")
+  flag.IntVar(&webserver.Port, "port", 8380, "port for webserver")
 	flag.Parse()
 	args := flag.Args()
 
-	if web {
-		webserver.Serve()
-		return
-	}
+  if web {
+    webserver.Serve()
+    return
+  }
 
 	if len(args) < 1 {
 		fmt.Println("Missing output filepath.")
@@ -45,27 +45,27 @@ func main() {
 
 	jsout := args[0]
 
-	cachedTrees := make(map[string]scanning.Tree)
-	if data, err := os.ReadFile(jsout); err == nil {
-		var cached scanning.Analysis
-		if err := json.Unmarshal(data, &cached); err != nil {
-			fmt.Fprintf(os.Stdout, "Old json file is malformed: %v\n", err)
-		} else {
-			for _, tree := range cached.Trees {
-				cachedTrees[tree.Root] = tree
-			}
-		}
-	}
+  cachedTrees := make(map[string]scanning.Tree)
+  if data, err := os.ReadFile(jsout); err == nil {
+    var cached scanning.Analysis
+    if err := json.Unmarshal(data, &cached); err != nil {
+      fmt.Fprintf(os.Stdout, "Old json file is malformed: %v\n", err)
+    } else {
+      for _, tree := range cached.Trees {
+        cachedTrees[tree.Root] = tree
+      }
+    }
+  }
 
 	trees := []scanning.Tree{}
 
 	for _, path := range args[1:] {
-		path, err := scanning.NormPath(path)
-		if err != nil {
+    path, err := scanning.NormPath(path)
+    if err != nil {
 			fmt.Fprintf(os.Stderr, "Path normalization error %v: %v\n", path, err)
-			return
-		}
-		old, _ := cachedTrees[path]
+      return
+    }
+    old, _ := cachedTrees[path]
 		tree, err := scanning.Rescan(path, &old)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error scanning tree %v: %v\n", path, err)
