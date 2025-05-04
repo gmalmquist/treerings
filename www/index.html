@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf8">
+  <title>Tree Rings File Management</title>
+  <link rel="stylesheet" type="text/css" href="main.css"></link>
+  <script type="text/javascript" src="treerings.js"></script>
+</head>
+<body onload="setup()">
+<h1>Tree Rings File Management</h1>
+<div class="groups">
+</div>
+  <div class="form" data-endpoint="POST /api/group">
+    <span class="title">Create Sync Group</span>
+  </div>
+  <div class="form" data-endpoint="POST /api/group/{group}">
+    <span class="title">Update Group</span>
+    <input type="text" data-path-arg="group" value="123"></input>
+    <button data-action="submit">Update Group</button>
+  </div>
+</div>
+</body>
+</html>
